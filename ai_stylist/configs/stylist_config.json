@@ -1,0 +1,31 @@
+{
+    "model": {
+        "name": "fashion-clip",
+        "device": "auto",
+        "precision": "float16"
+    },
+    "analysis": {
+        "categories": [
+            "garment_type",
+            "color", 
+            "style",
+            "material",
+            "occasion",
+            "brand_style"
+        ],
+        "confidence_threshold": 0.3,
+        "top_k": 3
+    },
+    "recommendations": {
+        "enable_color_harmony": true,
+        "enable_style_matching": true,
+        "enable_occasion_rules": true,
+        "max_recommendations": 5
+    },
+    "ui": {
+        "title": "AI-Стилист",
+        "description": "Анализ и рекомендации по стилю одежды",
+        "port": 7860,
+        "share": true
+    }
+}
