@@ -76,12 +76,23 @@ class ResNetAnalyzer:
         
         texture_type = "complex" if feature_std > 1.0 else "smooth"
         
+        """ДОБАВИТЬ АНАЛИЗ МАТЕРИАЛОВ ОБУВИ"""
+        texture_classes = {
+        # МАТЕРИАЛЫ ОБУВИ
+        411: 'velvet', 412: 'wool', 413: 'silk', 414: 'cotton',
+        416: 'denim', 417: 'leather', 418: 'fur',
+        419: 'plaid', 420: 'striped', 421: 'polka dot', 422: 'floral',
+        # ДОБАВИТЬ ДЛЯ ОБУВИ:
+        423: 'rubber', 424: 'suede', 425: 'canvas', 426: 'mesh'
+    }
+
         return {
             'feature_mean': float(feature_mean),
             'feature_std': float(feature_std),
             'feature_range': float(feature_range),
             'texture_type': texture_type
         }
+        
     
     def _analyze_colors(self, image: Image.Image) -> dict:
         """Анализирует доминирующие цвета с K-means"""

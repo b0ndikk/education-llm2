@@ -65,18 +65,30 @@ class YOLODetector:
             return {"error": f"YOLO ошибка: {str(e)}"}
     
     def _is_clothing_related(self, class_name: str, confidence: float) -> bool:
-        """Определяет, относится ли объект к одежде"""
-        clothing_keywords = [
-            'person', 'tie', 'handbag', 'backpack', 'suitcase', 
-            'sports ball', 'kite', 'baseball bat', 'baseball glove',
-            'skateboard', 'surfboard', 'tennis racket'
-        ]
+        """РАСШИРЕННЫЙ ФИЛЬТР ДЛЯ ВСЕЙ ОДЕЖДЫ"""
+        clothing_categories = [
+        # ОСНОВНАЯ ОДЕЖДА
+        'person', 'tie', 
         
-        # Для person требуется высокая уверенность
+        # ОБУВЬ (если есть в YOLO классах)
+        'shoe', 'sneaker', 'boot', 
+        
+        # СУМКИ И РЮКЗАКИ
+        'handbag', 'backpack', 'suitcase', 'purse',
+        
+        # СПОРТИВНЫЙ ИНВЕНТАРЬ (может содержать одежду)
+        'sports ball', 'baseball bat', 'baseball glove', 
+        'tennis racket', 'skateboard', 'surfboard',
+        
+        # АКСЕССУАРЫ
+        'umbrella', 'hat', 'cap'
+    ]
+    
+    # Для person - более низкий порог, так как на человеке может быть одежда
         if class_name == 'person':
-            return confidence > 0.5
+            return confidence > 0.3
         else:
-            return class_name in clothing_keywords
+            return class_name in clothing_categories and confidence > 0.4
     
     def _is_direct_clothing(self, class_name: str) -> bool:
         """Определяет, является ли объект непосредственно одеждой"""
