@@ -13,38 +13,16 @@ class YOLODetector:
         """YOLO детектор одежды"""
         print("🚀 Инициализация YOLO...")
         
-        # Загружаем YOLO (можно заменить на специализированную модель для одежды)
-        self.model = YOLO('yolov8n.pt')
-        
-        # Классы одежды в YOLO
-        self.clothing_classes = {
-            0: 'person',        # Может содержать одежду
-            26: 'tie', 27: 'suitcase', 28: 'frisbee', 
-            29: 'skis', 30: 'snowboard', 31: 'sports ball',
-            32: 'kite', 33: 'baseball bat', 34: 'baseball glove',
-            35: 'skateboard', 36: 'surfboard', 37: 'tennis racket',
-            39: 'bottle', 41: 'cup', 42: 'fork', 43: 'knife',
-            44: 'spoon', 45: 'bowl', 46: 'banana', 47: 'apple',
-            48: 'sandwich', 49: 'orange', 50: 'broccoli', 51: 'carrot',
-            52: 'hot dog', 53: 'pizza', 54: 'donut', 55: 'cake',
-            56: 'chair', 57: 'couch', 58: 'potted plant', 59: 'bed',
-            60: 'dining table', 61: 'toilet', 62: 'tv', 63: 'laptop',
-            64: 'mouse', 65: 'remote', 66: 'keyboard', 67: 'cell phone',
-            68: 'microwave', 69: 'oven', 70: 'toaster', 71: 'sink',
-            72: 'refrigerator', 73: 'book', 74: 'clock', 75: 'vase',
-            76: 'scissors', 77: 'teddy bear', 78: 'hair drier', 79: 'toothbrush'
-        }
+        # Используем YOLOv8 с лучшей детекцией
+        self.model = YOLO('yolov8m.pt')  # Средняя модель для баланса скорости/точности
         
         print("✅ YOLO загружен!")
     
     def detect_clothing(self, image: Image.Image) -> dict:
         """Обнаруживает одежду на изображении"""
         try:
-            # Конвертируем PIL в numpy для YOLO
             img_np = np.array(image)
-            
-            # Детекция
-            results = self.model(img_np)
+            results = self.model(img_np, conf=0.3)  # Более низкий порог для большего охвата
             
             detections = []
             for result in results:
@@ -53,38 +31,92 @@ class YOLODetector:
                     confidence = float(box.conf[0])
                     bbox = box.xyxy[0].tolist()
                     
-                    # Фильтруем по уверенности и классам
-                    if confidence > 0.5:
+                    class_name = self.model.names[class_id]
+                    
+                    # Расширенный фильтр для одежды и связанных объектов
+                    if self._is_clothing_related(class_name, confidence):
+                        # Вычисляем дополнительные метрики
+                        bbox_area = (bbox[2] - bbox[0]) * (bbox[3] - bbox[1])
+                        image_area = img_np.shape[1] * img_np.shape[0]
+                        area_ratio = bbox_area / image_area
+                        
                         detections.append({
                             'class_id': class_id,
-                            'class_name': self.clothing_classes.get(class_id, 'unknown'),
+                            'class_name': class_name,
                             'confidence': confidence,
                             'bbox': bbox,
-                            'center_x': (bbox[0] + bbox[2]) / 2,
-                            'center_y': (bbox[1] + bbox[3]) / 2
+                            'area_ratio': area_ratio,
+                            'is_large': area_ratio > 0.3,
+                            'center_x': (bbox[0] + bbox[2]) / 2 / img_np.shape[1],
+                            'center_y': (bbox[1] + bbox[3]) / 2 / img_np.shape[0]
                         })
+            
+            # Анализ композиции
+            composition = self._analyze_composition(detections, img_np.shape)
             
             return {
                 'detections': detections,
                 'total_items': len(detections),
-                'dominant_region': self._find_dominant_region(detections)
+                'composition': composition,
+                'has_clothing': len([d for d in detections if self._is_direct_clothing(d['class_name'])]) > 0
             }
             
         except Exception as e:
             return {"error": f"YOLO ошибка: {str(e)}"}
     
-    def _find_dominant_region(self, detections):
-        """Находит доминирующую область на изображении"""
-        if not detections:
-            return "center"
+    def _is_clothing_related(self, class_name: str, confidence: float) -> bool:
+        """Определяет, относится ли объект к одежде"""
+        clothing_keywords = [
+            'person', 'tie', 'handbag', 'backpack', 'suitcase', 
+            'sports ball', 'kite', 'baseball bat', 'baseball glove',
+            'skateboard', 'surfboard', 'tennis racket'
+        ]
         
-        # Анализируем распределение объектов
+        # Для person требуется высокая уверенность
+        if class_name == 'person':
+            return confidence > 0.5
+        else:
+            return class_name in clothing_keywords
+    
+    def _is_direct_clothing(self, class_name: str) -> bool:
+        """Определяет, является ли объект непосредственно одеждой"""
+        direct_clothing = ['tie', 'handbag', 'backpack']
+        return class_name in direct_clothing
+    
+    def _analyze_composition(self, detections: list, image_shape: tuple) -> dict:
+        """Анализирует композицию изображения"""
+        if not detections:
+            return {'dominant_region': 'center', 'layout': 'empty'}
+        
+        # Анализ распределения объектов
         centers_x = [d['center_x'] for d in detections]
         centers_y = [d['center_y'] for d in detections]
         
         avg_x = np.mean(centers_x)
         avg_y = np.mean(centers_y)
         
-        if avg_x < 0.33: return "left"
-        elif avg_x > 0.66: return "right"
-        else: return "center"
+        # Определяем доминирующую область
+        if avg_x < 0.33: 
+            horizontal_pos = 'left'
+        elif avg_x > 0.66: 
+            horizontal_pos = 'right'
+        else: 
+            horizontal_pos = 'center'
+            
+        if avg_y < 0.33: 
+            vertical_pos = 'top'
+        elif avg_y > 0.66: 
+            vertical_pos = 'bottom'
+        else: 
+            vertical_pos = 'middle'
+        
+        # Анализ размера объектов
+        large_objects = len([d for d in detections if d['is_large']])
+        layout = 'focused' if large_objects > 0 else 'scattered'
+        
+        return {
+            'dominant_region': f"{horizontal_pos}-{vertical_pos}",
+            'layout': layout,
+            'object_density': len(detections) / (image_shape[0] * image_shape[1] / 10000),
+            'has_large_objects': large_objects > 0
+        }
