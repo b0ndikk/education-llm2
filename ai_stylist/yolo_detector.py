@@ -22,7 +22,7 @@ class YOLODetector:
         """Обнаруживает одежду на изображении"""
         try:
             img_np = np.array(image)
-            results = self.model(img_np, conf=0.3)  # Более низкий порог для большего охвата
+            results = self.model(img_np, conf=0.25)  # Низкий порог для максимального охвата
             
             detections = []
             for result in results:
@@ -33,7 +33,7 @@ class YOLODetector:
                     
                     class_name = self.model.names[class_id]
                     
-                    # Расширенный фильтр для одежды и связанных объектов
+                    # Расширенный фильтр для всей одежды и аксессуаров
                     if self._is_clothing_related(class_name, confidence):
                         # Вычисляем дополнительные метрики
                         bbox_area = (bbox[2] - bbox[0]) * (bbox[3] - bbox[1])
@@ -65,34 +65,31 @@ class YOLODetector:
             return {"error": f"YOLO ошибка: {str(e)}"}
     
     def _is_clothing_related(self, class_name: str, confidence: float) -> bool:
-        """РАСШИРЕННЫЙ ФИЛЬТР ДЛЯ ВСЕЙ ОДЕЖДЫ"""
+        """РАСШИРЕННЫЙ ФИЛЬТР ДЛЯ ВСЕЙ ОДЕЖДЫ И АКСЕССУАРОВ"""
         clothing_categories = [
-        # ОСНОВНАЯ ОДЕЖДА
-        'person', 'tie', 
+            # ОСНОВНАЯ ОДЕЖДА
+            'person', 'tie', 
+            
+            # СУМКИ И РЮКЗАКИ
+            'handbag', 'backpack', 'suitcase', 'purse',
+            
+            # СПОРТИВНЫЙ ИНВЕНТАРЬ (может содержать одежду)
+            'sports ball', 'baseball bat', 'baseball glove', 
+            'tennis racket', 'skateboard', 'surfboard',
+            
+            # АКСЕССУАРЫ
+            'umbrella', 'hat', 'cap'
+        ]
         
-        # ОБУВЬ (если есть в YOLO классах)
-        'shoe', 'sneaker', 'boot', 
-        
-        # СУМКИ И РЮКЗАКИ
-        'handbag', 'backpack', 'suitcase', 'purse',
-        
-        # СПОРТИВНЫЙ ИНВЕНТАРЬ (может содержать одежду)
-        'sports ball', 'baseball bat', 'baseball glove', 
-        'tennis racket', 'skateboard', 'surfboard',
-        
-        # АКСЕССУАРЫ
-        'umbrella', 'hat', 'cap'
-    ]
-    
-    # Для person - более низкий порог, так как на человеке может быть одежда
+        # Для person - более низкий порог, так как на человеке может быть одежда
         if class_name == 'person':
-            return confidence > 0.3
+            return confidence > 0.25
         else:
-            return class_name in clothing_categories and confidence > 0.4
+            return class_name in clothing_categories and confidence > 0.3
     
     def _is_direct_clothing(self, class_name: str) -> bool:
         """Определяет, является ли объект непосредственно одеждой"""
-        direct_clothing = ['tie', 'handbag', 'backpack']
+        direct_clothing = ['tie', 'handbag', 'backpack', 'purse']
         return class_name in direct_clothing
     
     def _analyze_composition(self, detections: list, image_shape: tuple) -> dict:
