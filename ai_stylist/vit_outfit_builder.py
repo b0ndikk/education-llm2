@@ -31,12 +31,17 @@ except ImportError as e:
     print("Установите зависимости: pip install torchvision")
     TORCHVISION_AVAILABLE = False
 
-class FashionViT:
+class FashionViT(nn.Module):
     """Vision Transformer для анализа совместимости одежды"""
     
     def __init__(self, num_items: int = 10, embedding_dim: int = 768):
         if not TORCH_AVAILABLE:
             raise ImportError("PyTorch не установлен. Установите: pip install torch timm")
+        
+        super().__init__()
+        
+        # Определяем устройство
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         
         # Базовый ViT
         self.vit = timm.create_model('vit_base_patch16_224', pretrained=True)
@@ -68,6 +73,9 @@ class FashionViT:
         # Позиционное кодирование
         self.pos_encoding = self._create_positional_encoding(embedding_dim)
         
+        # Переносим все на устройство
+        self.to(self.device)
+        
     def _create_positional_encoding(self, d_model: int, max_len: int = 100):
         """Создает позиционное кодирование"""
         pe = torch.zeros(max_len, d_model)
@@ -89,6 +97,9 @@ class FashionViT:
         for image in item_images:
             # Преобразуем PIL в тензор
             image_tensor = self._preprocess_image(image)
+            
+            # Переносим тензор на то же устройство, что и модель
+            image_tensor = image_tensor.to(self.device)
             
             # Получаем эмбеддинг от ViT
             with torch.no_grad():
@@ -217,7 +228,7 @@ class OccasionRules:
     
     def get_rules(self, occasion: str) -> Dict:
         """Получает правила для конкретного случая"""
-        return self.rules.get(occasion, self.rules["casual"])
+        return self.rules.get(occasion, self.rules["прогулка"])
     
     def score_compatibility(self, item_features: Dict, occasion: str) -> float:
         """Оценивает совместимость предмета с случаем"""
@@ -305,25 +316,69 @@ class OutfitBuilder:
         # Объединяем оценки ViT и правил
         final_scores = []
         for i in range(len(items)):
-            vit_score = torch.sigmoid(compatibility_scores[i]).item()
+            vit_score = torch.sigmoid(compatibility_scores[i]).mean().item()
             occasion_score = occasion_scores[i]
             final_score = (vit_score * 0.7) + (occasion_score * 0.3)
             final_scores.append(final_score)
         
-        # Выбираем лучшие предметы
+        # НОВАЯ ЛОГИКА: Выбираем по одному предмету каждого типа
         item_ids = list(self.wardrobe.keys())
-        sorted_indices = sorted(range(len(final_scores)), 
-                               key=lambda i: final_scores[i], reverse=True)
-        
         selected_items = []
-        for i in sorted_indices[:max_items]:
-            if final_scores[i] > 0.3:  # Минимальный порог
-                selected_items.append({
-                    "item_id": item_ids[i],
-                    "image": items[i]["image"],
-                    "features": items[i]["features"],
-                    "score": final_scores[i]
-                })
+        
+        # Категории одежды для полного образа
+        categories = {
+            "верх": ["футболка", "рубашка", "блузка", "свитер", "топ", "майка", "поло", "водолазка"],
+            "низ": ["джинсы", "брюки", "юбка", "шорты", "леггинсы", "штаны"],
+            "обувь": ["кроссовки", "туфли", "ботинки", "сандали", "сапоги", "лодочки"],
+            "верхняя_одежда": ["куртка", "пальто", "пиджак", "кардиган", "бомбер", "ветровка"]
+        }
+        
+        # Словарь для хранения лучших предметов по категориям
+        best_by_category = {}
+        
+        for i, item in enumerate(items):
+            garment_type = item["features"].get("garment_type", "").lower()
+            score = final_scores[i]
+            
+            # Определяем категорию предмета
+            category = None
+            for cat, types in categories.items():
+                if any(garment in garment_type for garment in types):
+                    category = cat
+                    break
+            
+            if category:
+                # Если это лучший предмет в своей категории
+                if category not in best_by_category or score > best_by_category[category]["score"]:
+                    best_by_category[category] = {
+                        "item_id": item_ids[i],
+                        "image": item["image"],
+                        "features": item["features"],
+                        "score": score,
+                        "category": category
+                    }
+        
+        # Добавляем выбранные предметы
+        for category, item_data in best_by_category.items():
+            if item_data["score"] > 0.3:  # Минимальный порог
+                selected_items.append(item_data)
+        
+        # Если не хватает предметов, добавляем лучшие из оставшихся
+        if len(selected_items) < 2:
+            remaining_items = []
+            for i, item in enumerate(items):
+                if item_ids[i] not in [sel["item_id"] for sel in selected_items]:
+                    remaining_items.append({
+                        "item_id": item_ids[i],
+                        "image": item["image"],
+                        "features": item["features"],
+                        "score": final_scores[i]
+                    })
+            
+            # Сортируем по оценке и добавляем лучшие
+            remaining_items.sort(key=lambda x: x["score"], reverse=True)
+            for item in remaining_items[:2]:  # Добавляем до 2 дополнительных предметов
+                selected_items.append(item)
         
         # Вычисляем общую уверенность
         if selected_items:
@@ -346,19 +401,54 @@ class OutfitBuilder:
         
         explanation_parts = [f"Образ для случая '{occasion}':"]
         
+        # Группируем предметы по категориям
+        categories = {
+            "верх": [],
+            "низ": [],
+            "обувь": [],
+            "верхняя_одежда": []
+        }
+        
         for item in outfit:
-            features = item["features"]
-            if features:
-                parts = []
-                if features.get("garment_type"):
-                    parts.append(features["garment_type"])
-                if features.get("color"):
-                    parts.append(features["color"])
-                if features.get("style"):
-                    parts.append(features["style"])
-                
-                if parts:
-                    explanation_parts.append(f"• {' '.join(parts)} (уверенность: {item['score']:.1%})")
+            garment_type = item["features"].get("garment_type", "").lower()
+            category = None
+            
+            # Определяем категорию
+            if any(garment in garment_type for garment in ["футболка", "рубашка", "блузка", "свитер", "топ", "майка", "поло", "водолазка"]):
+                category = "верх"
+            elif any(garment in garment_type for garment in ["джинсы", "брюки", "юбка", "шорты", "леггинсы", "штаны"]):
+                category = "низ"
+            elif any(garment in garment_type for garment in ["кроссовки", "туфли", "ботинки", "сандали", "сапоги", "лодочки"]):
+                category = "обувь"
+            elif any(garment in garment_type for garment in ["куртка", "пальто", "пиджак", "кардиган", "бомбер", "ветровка"]):
+                category = "верхняя_одежда"
+            
+            if category:
+                categories[category].append(item)
+        
+        # Формируем объяснение по категориям
+        category_names = {
+            "верх": "👕 Верх:",
+            "низ": "👖 Низ:",
+            "обувь": "👟 Обувь:",
+            "верхняя_одежда": "🧥 Верхняя одежда:"
+        }
+        
+        for cat, items in categories.items():
+            if items:
+                explanation_parts.append(f"\n{category_names[cat]}")
+                for item in items:
+                    features = item["features"]
+                    parts = []
+                    if features.get("garment_type"):
+                        parts.append(features["garment_type"])
+                    if features.get("color"):
+                        parts.append(features["color"])
+                    if features.get("style"):
+                        parts.append(features["style"])
+                    
+                    if parts:
+                        explanation_parts.append(f"  • {' '.join(parts)} (уверенность: {item['score']:.1%})")
         
         return "\n".join(explanation_parts)
     
@@ -380,10 +470,10 @@ class ViTOutfitManager:
     
     def __init__(self):
         self.outfit_builder = OutfitBuilder()
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        
-        # Переносим модель на устройство
-        self.outfit_builder.vit_model.to(self.device)
+        if TORCH_AVAILABLE:
+            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        else:
+            self.device = None
         
     def add_item_from_analysis(self, image: Image.Image, analysis: Dict) -> str:
         """Добавляет предмет в гардероб на основе анализа ансамбля"""

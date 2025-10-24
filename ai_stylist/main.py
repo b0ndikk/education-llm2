@@ -39,9 +39,9 @@ class FashionAIStylist:
             yolo = analysis['yolo']
             detailed_analysis += f"\n**YOLO:** {yolo.get('total_items', 0)} объектов\n"
         
-        if 'resnet' in analysis:
-            resnet = analysis['resnet']
-            detailed_analysis += f"\n**ResNet:** текстура {resnet.get('texture_complexity', 'unknown')}\n"
+        if 'deepfashion_analysis' in analysis:
+            deepfashion = analysis['deepfashion_analysis']
+            detailed_analysis += f"\n**DeepFashion CNN:** {deepfashion.get('category', 'unknown')} ({deepfashion.get('confidence', 0):.1%})\n"
         
         return description, detailed_analysis
     
@@ -173,7 +173,7 @@ def create_interface():
     
     with gr.Blocks(title="🎯 AI Стилист - Ансамбль Моделей + ViT") as interface:
         gr.Markdown("# 🎯 AI СТИЛИСТ - АНСАМБЛЬ МОДЕЛЕЙ + ViT")
-        gr.Markdown("**FashionCLIP + YOLO + ResNet + Vision Transformer** - анализ и сборка образов")
+        gr.Markdown("**FashionCLIP + YOLO + DeepFashion CNN + Vision Transformer** - анализ и сборка образов")
         
         # Вкладки для разных функций
         with gr.Tabs():
@@ -275,7 +275,7 @@ def create_interface():
         ### 🚀 ИСПОЛЬЗУЕМЫЕ МОДЕЛИ:
         - **FashionCLIP** - классификация типа и стиля одежды
         - **YOLO** - обнаружение объектов и композиции
-        - **ResNet** - анализ текстур и цветов
+        - **DeepFashion CNN** - специализированная классификация модной одежды
         - **Vision Transformer (ViT)** - анализ совместимости и сборка образов
         
         ### 📋 ИНСТРУКЦИЯ:
@@ -290,7 +290,7 @@ def create_interface():
 def main():
     print("🎯 AI СТИЛИСТ - АНСАМБЛЬ МОДЕЛЕЙ + ViT")
     print("=" * 60)
-    print("✨ ИСПОЛЬЗУЕМЫЕ МОДЕЛИ: FashionCLIP + YOLO + ResNet + Vision Transformer")
+    print("✨ ИСПОЛЬЗУЕМЫЕ МОДЕЛИ: FashionCLIP + YOLO + DeepFashion CNN + Vision Transformer")
     print("=" * 60)
     
     interface = create_interface()
