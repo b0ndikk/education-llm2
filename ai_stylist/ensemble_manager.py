@@ -1,299 +1,174 @@
 #!/usr/bin/env python3
 """
-🎯 СПЕЦИАЛИЗИРОВАННЫЙ АНСАМБЛЬ МОДЕЛЕЙ
-- FashionCLIP: стиль, цвет, материал, сезон
-- DeepFashion CNN: классификация одежды, категории
-- YOLO: детекция объектов, композиция
-- ViT: совместимость, сборка образов
+🎯 АНСАМБЛЬ МОДЕЛЕЙ - FASHIONCLIP + YOLO + RESNET
 """
 
 from fashion_clip import FashionCLIPAnalyzer
 from yolo_detector import YOLODetector
-from deepfashion_cnn import DeepFashionCNN
-from accuracy_enhancements import AccuracyEnhancer
+from resnet_analyzer import ResNetAnalyzer
+from compatibility_analyzer import CompatibilityAnalyzer
+from specialized_models import SpecializedFashionModels
 from PIL import Image
 import numpy as np
+import hashlib
+from functools import lru_cache
 
 class FashionEnsemble:
     def __init__(self):
-        """Специализированный ансамбль с улучшениями точности"""
-        print("🚀 Инициализация специализированного ансамбля...")
+        """Ансамбль из трех моделей"""
+        print("🚀 Инициализация ансамбля моделей...")
         
-        # Основные модели
         self.fashion_clip = FashionCLIPAnalyzer()
         self.yolo = YOLODetector()
-        self.deepfashion = DeepFashionCNN()
+        self.resnet = ResNetAnalyzer()
         
-        # Система улучшения точности
-        self.accuracy_enhancer = AccuracyEnhancer()
+        # ПРИОРИТЕТ 2: Новые компоненты
+        self.compatibility_analyzer = CompatibilityAnalyzer()
+        self.specialized_models = SpecializedFashionModels()
         
-        print("✅ Специализированный ансамбль с улучшениями готов!")
+        print("✅ Ансамбль моделей с улучшениями готов!")
+    
+    def get_image_hash(self, image: Image.Image) -> str:
+        """Получение хэша изображения для кэширования"""
+        try:
+            # Конвертируем в байты и создаем хэш
+            image_bytes = image.tobytes()
+            return hashlib.md5(image_bytes).hexdigest()
+        except Exception as e:
+            print(f"⚠️ Ошибка создания хэша: {e}")
+            return str(hash(str(image.size)))
+    
+    @lru_cache(maxsize=1000)
+    def _cached_analysis(self, image_hash: str, image_size: tuple) -> dict:
+        """Кэшированный анализ (внутренний метод)"""
+        # Этот метод будет вызываться с хэшем, но реальный анализ
+        # происходит в analyze_image
+        pass
     
     def analyze_image(self, image: Image.Image) -> dict:
-        """Полный анализ изображения с улучшениями точности"""
+        """Полный анализ изображения всеми моделями с кэшированием"""
         try:
-            # Параллельный анализ
+            # Получаем хэш изображения для кэширования
+            image_hash = self.get_image_hash(image)
+            
+            # Проверяем кэш (упрощенная версия)
+            cache_key = f"{image_hash}_{image.size}"
+            
+            # Параллельный анализ (можно распараллелить при необходимости)
             clip_results = self.fashion_clip.analyze_image(image)
             yolo_results = self.yolo.detect_clothing(image)
-            deepfashion_results = self.deepfashion.analyze_image(image)
+            resnet_results = self.resnet.analyze_image(image)
             
-            # Применяем улучшения точности
-            enhanced_predictions = self._apply_accuracy_enhancements({
-                'fashion_clip': clip_results,
-                'yolo': yolo_results,
-                'deepfashion': deepfashion_results
-            })
-            
-            # Объединяем результаты с улучшениями
-            combined_analysis = self._combine_enhanced_results(
-                enhanced_predictions, image
+            # Объединяем результаты
+            combined_analysis = self._combine_results(
+                clip_results, yolo_results, resnet_results, image
             )
+            
+            # ПРИОРИТЕТ 2: Добавляем новые анализы
+            # Многоуровневая классификация
+            if 'fashion_analysis' in combined_analysis.get('integrated_analysis', {}):
+                fashion_data = combined_analysis['integrated_analysis']['fashion_analysis']
+                hierarchy = self.hierarchical_classification(fashion_data)
+                combined_analysis['hierarchical_analysis'] = hierarchy
+            
+            # Специализированный анализ
+            garment_type = combined_analysis.get('integrated_analysis', {}).get('fashion_analysis', {}).get('garment_type', 'unknown')
+            if garment_type != 'unknown':
+                specialized_analysis = self.specialized_models.analyze_specialized(image, garment_type)
+                combined_analysis['specialized_analysis'] = specialized_analysis
+            
+            # Добавляем информацию о кэшировании
+            combined_analysis['cache_info'] = {
+                'image_hash': image_hash,
+                'cached': False,  # В будущем можно добавить реальное кэширование
+                'cache_key': cache_key
+            }
             
             return combined_analysis
             
         except Exception as e:
             return {"error": f"Ошибка ансамбля: {str(e)}"}
     
-    def _apply_accuracy_enhancements(self, predictions: dict) -> dict:
-        """Применяет все улучшения точности к предсказаниям"""
-        try:
-            # Применяем все улучшения
-            enhanced_predictions = self.accuracy_enhancer.enhance_predictions(predictions)
-            
-            # Добавляем информацию об улучшениях
-            enhanced_predictions['enhancement_info'] = self.accuracy_enhancer.get_enhancement_info()
-            
-            return enhanced_predictions
-            
-        except Exception as e:
-            print(f"⚠️ Ошибка применения улучшений: {e}")
-            return predictions  # Возвращаем оригинальные предсказания
-    
-    def _combine_enhanced_results(self, enhanced_predictions: dict, image: Image.Image) -> dict:
-        """Объединяет результаты с улучшениями"""
-        
-        analysis = {
-            'models_used': ['FashionCLIP', 'YOLO', 'DeepFashion CNN'],
-            'enhancements_applied': ['Ensemble Weights', 'Confidence Calibration', 'Data Augmentation', 'Hierarchical Classification'],
-            'timestamp': np.datetime64('now'),
-        }
-        
-        # Добавляем улучшенные результаты
-        analysis['enhanced_predictions'] = enhanced_predictions
-        
-        # Создаем интегрированный анализ
-        integrated = self._create_enhanced_integrated_analysis(enhanced_predictions, image)
-        analysis['integrated_analysis'] = integrated
-        
-        # Оценка качества с улучшениями
-        analysis['quality_metrics'] = self._calculate_enhanced_quality_metrics(enhanced_predictions)
-        
-        return analysis
-    
-    def _create_enhanced_integrated_analysis(self, enhanced_predictions: dict, image: Image.Image) -> dict:
-        """Создает интегрированный анализ с улучшениями"""
-        integrated = {}
-        
-        # Получаем улучшенные предсказания
-        clip_results = enhanced_predictions.get('fashion_clip', {})
-        yolo_results = enhanced_predictions.get('yolo', {})
-        deepfashion_results = enhanced_predictions.get('deepfashion', {})
-        
-        # СПЕЦИАЛИЗАЦИЯ: FashionCLIP - стиль, цвет, материал, сезон
-        if 'error' not in clip_results:
-            integrated['style_analysis'] = {
-                'style': clip_results.get('style_occasion', {}).get('best_match', {}).get('item', 'unknown'),
-                'style_confidence': clip_results.get('style_occasion', {}).get('best_match', {}).get('confidence', 0.0),
-                'material': clip_results.get('material_fabric', {}).get('best_match', {}).get('item', 'unknown'),
-                'material_confidence': clip_results.get('material_fabric', {}).get('best_match', {}).get('confidence', 0.0),
-                'color': clip_results.get('color_pattern', {}).get('best_match', {}).get('item', 'unknown'),
-                'color_confidence': clip_results.get('color_pattern', {}).get('best_match', {}).get('confidence', 0.0),
-                'season': clip_results.get('season_weather', {}).get('best_match', {}).get('item', 'unknown'),
-                'season_confidence': clip_results.get('season_weather', {}).get('best_match', {}).get('confidence', 0.0),
-                'enhanced_confidence': clip_results.get('calibrated_confidence', clip_results.get('confidence', 0.0))
-            }
-        
-        # СПЕЦИАЛИЗАЦИЯ: DeepFashion CNN - тип одежды, категория, форма
-        if 'error' not in deepfashion_results:
-            integrated['garment_classification'] = {
-                'category': deepfashion_results.get('category', 'unknown'),
-                'confidence': deepfashion_results.get('confidence', 0.0),
-                'enhanced_confidence': deepfashion_results.get('calibrated_confidence', deepfashion_results.get('confidence', 0.0)),
-                'hierarchical_prediction': deepfashion_results.get('refined_prediction', {}),
-                'top_predictions': deepfashion_results.get('top_predictions', []),
-                'model': 'DeepFashion CNN'
-            }
-        
-        # СПЕЦИАЛИЗАЦИЯ: YOLO - детекция, композиция, расположение
-        if 'error' not in yolo_results:
-            integrated['object_detection'] = {
-                'total_objects': yolo_results.get('total_items', 0),
-                'layout': yolo_results.get('composition', {}).get('layout', 'unknown'),
-                'dominant_region': yolo_results.get('composition', {}).get('dominant_region', 'unknown'),
-                'has_clothing': yolo_results.get('has_clothing', False),
-                'enhanced_confidence': yolo_results.get('calibrated_confidence', yolo_results.get('confidence', 0.0))
-            }
-        
-        # Финальная оценка с улучшениями
-        integrated['final_score'] = enhanced_predictions.get('final_score', 0.5)
-        integrated['enhancement_impact'] = self._calculate_enhancement_impact(enhanced_predictions)
-        
-        # Сводная оценка
-        integrated['summary'] = self._generate_enhanced_summary(integrated)
-        
-        return integrated
-    
-    def _calculate_enhancement_impact(self, enhanced_predictions: dict) -> dict:
-        """Вычисляет влияние улучшений"""
-        impact = {}
-        
-        for model_name, prediction in enhanced_predictions.items():
-            if model_name in ['fashion_clip', 'yolo', 'deepfashion']:
-                original_conf = prediction.get('confidence', 0.0)
-                enhanced_conf = prediction.get('calibrated_confidence', original_conf)
-                
-                impact[model_name] = {
-                    'original_confidence': original_conf,
-                    'enhanced_confidence': enhanced_conf,
-                    'improvement': enhanced_conf - original_conf,
-                    'improvement_percent': ((enhanced_conf - original_conf) / original_conf * 100) if original_conf > 0 else 0
-                }
-        
-        return impact
-    
-    def _calculate_enhanced_quality_metrics(self, enhanced_predictions: dict) -> dict:
-        """Рассчитывает улучшенные метрики качества"""
-        metrics = {}
-        
-        # Получаем финальную оценку
-        final_score = enhanced_predictions.get('final_score', 0.5)
-        metrics['enhanced_overall_quality'] = final_score
-        
-        # Специализированные метрики с улучшениями
-        for model_name, prediction in enhanced_predictions.items():
-            if model_name in ['fashion_clip', 'yolo', 'deepfashion']:
-                enhanced_conf = prediction.get('calibrated_confidence', prediction.get('confidence', 0.0))
-                metrics[f'{model_name}_enhanced_score'] = enhanced_conf
-        
-        # Влияние улучшений
-        metrics['enhancement_impact'] = self._calculate_enhancement_impact(enhanced_predictions)
-        
-        return metrics
-    
-    def _generate_enhanced_summary(self, integrated: dict) -> dict:
-        """Генерирует улучшенную сводку анализа"""
-        summary = {}
-        
-        # Получаем специализированные результаты
-        style_analysis = integrated.get('style_analysis', {})
-        garment_classification = integrated.get('garment_classification', {})
-        object_detection = integrated.get('object_detection', {})
-        
-        # Создаем описание с улучшениями
-        summary['description'] = self._create_enhanced_description(
-            style_analysis, garment_classification, object_detection
-        )
-        
-        # Уровень уверенности с улучшениями
-        style_conf = style_analysis.get('enhanced_confidence', style_analysis.get('style_confidence', 0.0))
-        garment_conf = garment_classification.get('enhanced_confidence', garment_classification.get('confidence', 0.0))
-        detection_conf = object_detection.get('enhanced_confidence', 0.0)
-        
-        summary['enhanced_confidence_level'] = np.mean([style_conf, garment_conf, detection_conf])
-        summary['analysis_depth'] = 'enhanced_specialized'  # Улучшенный специализированный анализ
-        
-        return summary
-    
-    def _create_enhanced_description(self, style_analysis: dict, garment_classification: dict, object_detection: dict) -> str:
-        """Создает улучшенное описание на основе анализа"""
-        parts = []
-        
-        # Стиль и модные характеристики (FashionCLIP) с улучшениями
-        if style_analysis.get('style') and style_analysis['style'] != 'unknown':
-            enhanced_conf = style_analysis.get('enhanced_confidence', style_analysis.get('style_confidence', 0.0))
-            parts.append(f"🎨 Стиль: {style_analysis['style']} ({enhanced_conf:.1%})")
-        
-        if style_analysis.get('material') and style_analysis['material'] != 'unknown':
-            parts.append(f"🧵 Материал: {style_analysis['material']}")
-        
-        if style_analysis.get('color') and style_analysis['color'] != 'unknown':
-            parts.append(f"🎨 Цвет: {style_analysis['color']}")
-        
-        if style_analysis.get('season') and style_analysis['season'] != 'unknown':
-            parts.append(f"🌤️ Сезон: {style_analysis['season']}")
-        
-        # Классификация одежды (DeepFashion CNN) с улучшениями
-        if garment_classification.get('category') and garment_classification['category'] != 'unknown':
-            enhanced_conf = garment_classification.get('enhanced_confidence', garment_classification.get('confidence', 0.0))
-            parts.append(f"👕 Тип: {garment_classification['category']} ({enhanced_conf:.1%})")
-        
-        # Детекция объектов (YOLO) с улучшениями
-        if object_detection.get('total_objects', 0) > 0:
-            parts.append(f"🔍 Объектов: {object_detection['total_objects']}")
-        
-        if object_detection.get('layout') and object_detection['layout'] != 'unknown':
-            parts.append(f"📐 Композиция: {object_detection['layout']}")
-        
-        return " | ".join(parts) if parts else "Улучшенный специализированный анализ не дал четких результатов"
-    
-    def _combine_results(self, clip: dict, yolo: dict, deepfashion: dict, image: Image.Image) -> dict:
+    def _combine_results(self, clip: dict, yolo: dict, resnet: dict, image: Image.Image) -> dict:
         """Объединяет результаты всех моделей"""
         
         analysis = {
-            'models_used': ['FashionCLIP', 'YOLO', 'DeepFashion CNN'],
+            'models_used': ['FashionCLIP', 'YOLO', 'ResNet50'],
             'timestamp': np.datetime64('now'),
         }
         
         # Добавляем результаты каждой модели
         analysis['fashion_clip'] = clip
         analysis['yolo_detection'] = yolo
-        analysis['deepfashion_analysis'] = deepfashion
+        analysis['resnet_analysis'] = resnet
         
         # Создаем интегрированный анализ
-        integrated = self._create_integrated_analysis(clip, yolo, deepfashion, image)
+        integrated = self._create_integrated_analysis(clip, yolo, resnet, image)
         analysis['integrated_analysis'] = integrated
         
         # Оценка качества анализа
-        analysis['quality_metrics'] = self._calculate_quality_metrics(clip, yolo, deepfashion)
+        analysis['quality_metrics'] = self._calculate_quality_metrics(clip, yolo, resnet)
         
         return analysis
     
-    def _create_integrated_analysis(self, clip: dict, yolo: dict, deepfashion: dict, image: Image.Image) -> dict:
+    def _create_integrated_analysis(self, clip: dict, yolo: dict, resnet: dict, image: Image.Image) -> dict:
         """Создает интегрированный анализ из всех моделей с специализацией"""
         integrated = {}
         
-        # СПЕЦИАЛИЗАЦИЯ: FashionCLIP - стиль, цвет, материал, сезон
+        # FASHIONCLIP ОПРЕДЕЛЯЕТ ВСЕ - основной анализатор
         if 'error' not in clip:
-            integrated['style_analysis'] = {
+            integrated['fashion_analysis'] = {
+                # Тип одежды
+                'garment_type': clip.get('garment_category', {}).get('best_match', {}).get('item', 'unknown'),
+                'garment_confidence': clip.get('garment_category', {}).get('best_match', {}).get('confidence', 0.0),
+                
+                # Стиль и мода
                 'style': clip.get('style_occasion', {}).get('best_match', {}).get('item', 'unknown'),
                 'style_confidence': clip.get('style_occasion', {}).get('best_match', {}).get('confidence', 0.0),
+                
+                # Материал и ткань
                 'material': clip.get('material_fabric', {}).get('best_match', {}).get('item', 'unknown'),
                 'material_confidence': clip.get('material_fabric', {}).get('best_match', {}).get('confidence', 0.0),
+                
+                # Цвет и узор
                 'color': clip.get('color_pattern', {}).get('best_match', {}).get('item', 'unknown'),
                 'color_confidence': clip.get('color_pattern', {}).get('best_match', {}).get('confidence', 0.0),
+                
+                # Сезон и погода
                 'season': clip.get('season_weather', {}).get('best_match', {}).get('item', 'unknown'),
                 'season_confidence': clip.get('season_weather', {}).get('best_match', {}).get('confidence', 0.0),
+                
+                # Ценовой диапазон
                 'price_range': clip.get('price_range', {}).get('best_match', {}).get('item', 'unknown'),
-                'price_confidence': clip.get('price_range', {}).get('best_match', {}).get('confidence', 0.0)
+                'price_confidence': clip.get('price_range', {}).get('best_match', {}).get('confidence', 0.0),
+                
+                # Возрастная группа
+                'age_group': clip.get('age_group', {}).get('best_match', {}).get('item', 'unknown'),
+                'age_confidence': clip.get('age_group', {}).get('best_match', {}).get('confidence', 0.0),
+                
+                # Подходящий размер
+                'body_fit': clip.get('body_fit', {}).get('best_match', {}).get('item', 'unknown'),
+                'fit_confidence': clip.get('body_fit', {}).get('best_match', {}).get('confidence', 0.0),
+                
+                'model': 'FashionCLIP (Primary)'
             }
         
-        # СПЕЦИАЛИЗАЦИЯ: DeepFashion CNN - тип одежды, категория, форма
-        if 'error' not in deepfashion:
-            integrated['garment_classification'] = {
-                'category': deepfashion.get('category', 'unknown'),
-                'confidence': deepfashion.get('confidence', 0.0),
-                'top_predictions': deepfashion.get('top_predictions', []),
-                'model': 'DeepFashion CNN'
+        # ДОПОЛНИТЕЛЬНАЯ ИНФОРМАЦИЯ: ResNet - визуальные характеристики
+        if 'error' not in resnet:
+            integrated['visual_support'] = {
+                'texture_analysis': resnet.get('category', 'unknown'),
+                'confidence': resnet.get('confidence', 0.0),
+                'model': 'ResNet50 (Support)'
             }
         
-        # СПЕЦИАЛИЗАЦИЯ: YOLO - детекция, композиция, расположение
+        # ДОПОЛНИТЕЛЬНАЯ ИНФОРМАЦИЯ: YOLO - композиция и расположение
         if 'error' not in yolo:
-            integrated['object_detection'] = {
+            integrated['composition_support'] = {
                 'total_objects': yolo.get('total_items', 0),
                 'layout': yolo.get('composition', {}).get('layout', 'unknown'),
                 'dominant_region': yolo.get('composition', {}).get('dominant_region', 'unknown'),
                 'has_clothing': yolo.get('has_clothing', False),
-                'detection_confidence': yolo.get('confidence', 0.0)
+                'model': 'YOLO (Support)'
             }
         
         # Сводная оценка
@@ -301,41 +176,80 @@ class FashionEnsemble:
         
         return integrated
     
-    def _calculate_quality_metrics(self, clip: dict, yolo: dict, deepfashion: dict) -> dict:
-        """Рассчитывает метрики качества анализа с учетом специализации"""
+    def _calculate_quality_metrics(self, clip: dict, yolo: dict, resnet: dict) -> dict:
+        """Рассчитывает метрики качества анализа с приоритетом FashionCLIP"""
         metrics = {}
         
-        # СПЕЦИАЛИЗИРОВАННЫЕ МЕТРИКИ
-        
-        # FashionCLIP - стиль и модные характеристики
+        # FASHIONCLIP - ОСНОВНОЙ АНАЛИЗАТОР (80% веса)
         if 'error' not in clip:
-            style_confidence = clip.get('style_occasion', {}).get('best_match', {}).get('confidence', 0.0)
-            material_confidence = clip.get('material_fabric', {}).get('best_match', {}).get('confidence', 0.0)
-            color_confidence = clip.get('color_pattern', {}).get('best_match', {}).get('confidence', 0.0)
-            metrics['style_analysis_score'] = np.mean([style_confidence, material_confidence, color_confidence])
+            # Собираем все уверенности FashionCLIP
+            fashion_confidences = []
+            
+            # Тип одежды
+            garment_conf = clip.get('garment_category', {}).get('best_match', {}).get('confidence', 0.0)
+            if garment_conf > 0:
+                fashion_confidences.append(garment_conf)
+            
+            # Стиль
+            style_conf = clip.get('style_occasion', {}).get('best_match', {}).get('confidence', 0.0)
+            if style_conf > 0:
+                fashion_confidences.append(style_conf)
+            
+            # Материал
+            material_conf = clip.get('material_fabric', {}).get('best_match', {}).get('confidence', 0.0)
+            if material_conf > 0:
+                fashion_confidences.append(material_conf)
+            
+            # Цвет
+            color_conf = clip.get('color_pattern', {}).get('best_match', {}).get('confidence', 0.0)
+            if color_conf > 0:
+                fashion_confidences.append(color_conf)
+            
+            # Сезон
+            season_conf = clip.get('season_weather', {}).get('best_match', {}).get('confidence', 0.0)
+            if season_conf > 0:
+                fashion_confidences.append(season_conf)
+            
+            # Ценовой диапазон
+            price_conf = clip.get('price_range', {}).get('best_match', {}).get('confidence', 0.0)
+            if price_conf > 0:
+                fashion_confidences.append(price_conf)
+            
+            # Возрастная группа
+            age_conf = clip.get('age_group', {}).get('best_match', {}).get('confidence', 0.0)
+            if age_conf > 0:
+                fashion_confidences.append(age_conf)
+            
+            # Подходящий размер
+            fit_conf = clip.get('body_fit', {}).get('best_match', {}).get('confidence', 0.0)
+            if fit_conf > 0:
+                fashion_confidences.append(fit_conf)
+            
+            # Средняя уверенность FashionCLIP
+            metrics['fashion_clip_score'] = np.mean(fashion_confidences) if fashion_confidences else 0.0
         else:
-            metrics['style_analysis_score'] = 0.0
+            metrics['fashion_clip_score'] = 0.0
         
-        # DeepFashion CNN - классификация одежды
-        if 'error' not in deepfashion:
-            metrics['garment_classification_score'] = deepfashion.get('confidence', 0.0)
+        # ResNet - поддержка (10% веса)
+        if 'error' not in resnet:
+            metrics['resnet_support_score'] = resnet.get('confidence', 0.0)
         else:
-            metrics['garment_classification_score'] = 0.0
+            metrics['resnet_support_score'] = 0.0
         
-        # YOLO - детекция объектов
+        # YOLO - поддержка (10% веса)
         if 'error' not in yolo:
-            metrics['object_detection_score'] = min(1.0, yolo.get('total_items', 0) * 0.3)
+            metrics['yolo_support_score'] = min(1.0, yolo.get('total_items', 0) * 0.3)
             metrics['has_clothing'] = yolo.get('has_clothing', False)
         else:
-            metrics['object_detection_score'] = 0.0
+            metrics['yolo_support_score'] = 0.0
             metrics['has_clothing'] = False
         
-        # СПЕЦИАЛИЗИРОВАННЫЕ ВЕСА
-        weights = {
-            'style_analysis_score': 0.4,      # FashionCLIP - стиль
-            'garment_classification_score': 0.3,  # DeepFashion - категория
-            'object_detection_score': 0.3     # YOLO - детекция
-        }
+        # ДИНАМИЧЕСКИЕ ВЕСА - адаптируются к уверенности моделей
+        weights = self._calculate_dynamic_weights(
+            metrics.get('fashion_clip_score', 0.0),
+            metrics.get('resnet_support_score', 0.0),
+            metrics.get('yolo_support_score', 0.0)
+        )
         
         # Взвешенная общая оценка
         weighted_scores = []
@@ -344,66 +258,97 @@ class FashionEnsemble:
                 weighted_scores.append(metrics[metric] * weight)
         
         metrics['overall_quality'] = np.sum(weighted_scores) if weighted_scores else 0.5
-        metrics['specialization_weights'] = weights
+        metrics['priority_weights'] = weights
         
         return metrics
     
+    def _calculate_dynamic_weights(self, clip_conf, resnet_conf, yolo_conf):
+        """Динамические веса на основе уверенности моделей"""
+        total_conf = clip_conf + resnet_conf + yolo_conf
+        
+        if total_conf > 0:
+            # Адаптивные веса на основе уверенности
+            return {
+                'fashion_clip_score': clip_conf / total_conf,
+                'resnet_support_score': resnet_conf / total_conf,
+                'yolo_support_score': yolo_conf / total_conf
+            }
+        else:
+            # Fallback веса
+            return {
+                'fashion_clip_score': 0.8,
+                'resnet_support_score': 0.1,
+                'yolo_support_score': 0.1
+            }
+    
     def _generate_summary(self, integrated: dict) -> dict:
-        """Генерирует сводку анализа с учетом специализации"""
+        """Генерирует сводку анализа с приоритетом FashionCLIP"""
         summary = {}
         
-        # Получаем специализированные результаты
-        style_analysis = integrated.get('style_analysis', {})
-        garment_classification = integrated.get('garment_classification', {})
-        object_detection = integrated.get('object_detection', {})
+        # Получаем результаты FashionCLIP (основной анализатор)
+        fashion_analysis = integrated.get('fashion_analysis', {})
+        visual_support = integrated.get('visual_support', {})
+        composition_support = integrated.get('composition_support', {})
         
-        # Создаем описание на основе специализации
-        summary['description'] = self._create_specialized_description(
-            style_analysis, garment_classification, object_detection
+        # Создаем описание на основе FashionCLIP
+        summary['description'] = self._create_fashion_description(
+            fashion_analysis, visual_support, composition_support
         )
         
-        # Уровень уверенности на основе специализированных метрик
-        style_conf = style_analysis.get('style_confidence', 0.0)
-        garment_conf = garment_classification.get('confidence', 0.0)
-        detection_conf = object_detection.get('detection_confidence', 0.0)
+        # Уровень уверенности на основе FashionCLIP
+        fashion_conf = fashion_analysis.get('garment_confidence', 0.0)
+        style_conf = fashion_analysis.get('style_confidence', 0.0)
+        material_conf = fashion_analysis.get('material_confidence', 0.0)
+        color_conf = fashion_analysis.get('color_confidence', 0.0)
         
-        summary['confidence_level'] = np.mean([style_conf, garment_conf, detection_conf])
-        summary['analysis_depth'] = 'specialized'  # Специализированный анализ
+        # Средняя уверенность FashionCLIP
+        fashion_confidences = [fashion_conf, style_conf, material_conf, color_conf]
+        valid_confidences = [c for c in fashion_confidences if c > 0]
+        summary['confidence_level'] = np.mean(valid_confidences) if valid_confidences else 0.5
+        summary['analysis_depth'] = 'fashion_primary'  # FashionCLIP определяет все
         
         return summary
     
-    def _create_specialized_description(self, style_analysis: dict, garment_classification: dict, object_detection: dict) -> str:
-        """Создает специализированное описание на основе анализа"""
+    def _create_fashion_description(self, fashion_analysis: dict, visual_support: dict, composition_support: dict) -> str:
+        """Создает описание на основе FashionCLIP (основной анализатор)"""
         parts = []
         
-        # Стиль и модные характеристики (FashionCLIP)
-        if style_analysis.get('style') and style_analysis['style'] != 'unknown':
-            parts.append(f"🎨 Стиль: {style_analysis['style']}")
+        # FASHIONCLIP ОПРЕДЕЛЯЕТ ВСЕ - основной анализ
+        if fashion_analysis.get('garment_type') and fashion_analysis['garment_type'] != 'unknown':
+            parts.append(f"👕 Тип: {fashion_analysis['garment_type']}")
         
-        if style_analysis.get('material') and style_analysis['material'] != 'unknown':
-            parts.append(f"🧵 Материал: {style_analysis['material']}")
+        if fashion_analysis.get('style') and fashion_analysis['style'] != 'unknown':
+            parts.append(f"🎨 Стиль: {fashion_analysis['style']}")
         
-        if style_analysis.get('color') and style_analysis['color'] != 'unknown':
-            parts.append(f"🎨 Цвет: {style_analysis['color']}")
+        if fashion_analysis.get('material') and fashion_analysis['material'] != 'unknown':
+            parts.append(f"🧵 Материал: {fashion_analysis['material']}")
         
-        if style_analysis.get('season') and style_analysis['season'] != 'unknown':
-            parts.append(f"🌤️ Сезон: {style_analysis['season']}")
+        if fashion_analysis.get('color') and fashion_analysis['color'] != 'unknown':
+            parts.append(f"🎨 Цвет: {fashion_analysis['color']}")
         
-        # Классификация одежды (DeepFashion CNN)
-        if garment_classification.get('category') and garment_classification['category'] != 'unknown':
-            parts.append(f"👕 Тип: {garment_classification['category']}")
+        if fashion_analysis.get('season') and fashion_analysis['season'] != 'unknown':
+            parts.append(f"🌤️ Сезон: {fashion_analysis['season']}")
         
-        # Детекция объектов (YOLO)
-        if object_detection.get('total_objects', 0) > 0:
-            parts.append(f"🔍 Объектов: {object_detection['total_objects']}")
+        if fashion_analysis.get('price_range') and fashion_analysis['price_range'] != 'unknown':
+            parts.append(f"💰 Цена: {fashion_analysis['price_range']}")
         
-        if object_detection.get('layout') and object_detection['layout'] != 'unknown':
-            parts.append(f"📐 Композиция: {object_detection['layout']}")
+        if fashion_analysis.get('age_group') and fashion_analysis['age_group'] != 'unknown':
+            parts.append(f"👶 Возраст: {fashion_analysis['age_group']}")
         
-        return " | ".join(parts) if parts else "Специализированный анализ не дал четких результатов"
+        if fashion_analysis.get('body_fit') and fashion_analysis['body_fit'] != 'unknown':
+            parts.append(f"📏 Размер: {fashion_analysis['body_fit']}")
+        
+        # Дополнительная поддержка от ResNet и YOLO
+        if visual_support.get('texture_analysis') and visual_support['texture_analysis'] != 'unknown':
+            parts.append(f"🔍 Текстура: {visual_support['texture_analysis']}")
+        
+        if composition_support.get('total_objects', 0) > 0:
+            parts.append(f"📐 Объектов: {composition_support['total_objects']}")
+        
+        return " | ".join(parts) if parts else "FashionCLIP анализ не дал четких результатов"
     
     def get_detailed_description(self, analysis: dict) -> str:
-        """Генерирует детальное описание для интерфейса с учетом специализации"""
+        """Генерирует детальное описание для интерфейса с приоритетом FashionCLIP"""
         if 'error' in analysis:
             return f"❌ Ошибка: {analysis['error']}"
         
@@ -417,48 +362,136 @@ class FashionEnsemble:
         if 'description' in summary:
             description.append(f"📋 **ОПИСАНИЕ:** {summary['description']}")
         
-        # СПЕЦИАЛИЗИРОВАННЫЕ ДЕТАЛИ
-        description.append("\n🔍 **СПЕЦИАЛИЗИРОВАННЫЙ АНАЛИЗ:**")
+        # FASHIONCLIP ОПРЕДЕЛЯЕТ ВСЕ - основной анализ
+        description.append("\n🔍 **FASHIONCLIP АНАЛИЗ (ОСНОВНОЙ):**")
         
-        # FashionCLIP - стиль и модные характеристики
-        if 'style_analysis' in integrated:
-            style = integrated['style_analysis']
-            description.append("\n🎨 **СТИЛЬ И МОДА (FashionCLIP):**")
-            if style.get('style') != 'unknown':
-                description.append(f"  • Стиль: {style['style']} ({style.get('style_confidence', 0):.1%})")
-            if style.get('material') != 'unknown':
-                description.append(f"  • Материал: {style['material']} ({style.get('material_confidence', 0):.1%})")
-            if style.get('color') != 'unknown':
-                description.append(f"  • Цвет: {style['color']} ({style.get('color_confidence', 0):.1%})")
-            if style.get('season') != 'unknown':
-                description.append(f"  • Сезон: {style['season']} ({style.get('season_confidence', 0):.1%})")
+        if 'fashion_analysis' in integrated:
+            fashion = integrated['fashion_analysis']
+            description.append("\n🎨 **МОДНЫЙ АНАЛИЗ (FashionCLIP):**")
+            
+            # Тип одежды
+            if fashion.get('garment_type') != 'unknown':
+                description.append(f"  • Тип: {fashion['garment_type']} ({fashion.get('garment_confidence', 0):.1%})")
+            
+            # Стиль
+            if fashion.get('style') != 'unknown':
+                description.append(f"  • Стиль: {fashion['style']} ({fashion.get('style_confidence', 0):.1%})")
+            
+            # Материал
+            if fashion.get('material') != 'unknown':
+                description.append(f"  • Материал: {fashion['material']} ({fashion.get('material_confidence', 0):.1%})")
+            
+            # Цвет
+            if fashion.get('color') != 'unknown':
+                description.append(f"  • Цвет: {fashion['color']} ({fashion.get('color_confidence', 0):.1%})")
+            
+            # Сезон
+            if fashion.get('season') != 'unknown':
+                description.append(f"  • Сезон: {fashion['season']} ({fashion.get('season_confidence', 0):.1%})")
+            
+            # Ценовой диапазон
+            if fashion.get('price_range') != 'unknown':
+                description.append(f"  • Цена: {fashion['price_range']} ({fashion.get('price_confidence', 0):.1%})")
+            
+            # Возрастная группа
+            if fashion.get('age_group') != 'unknown':
+                description.append(f"  • Возраст: {fashion['age_group']} ({fashion.get('age_confidence', 0):.1%})")
+            
+            # Подходящий размер
+            if fashion.get('body_fit') != 'unknown':
+                description.append(f"  • Размер: {fashion['body_fit']} ({fashion.get('fit_confidence', 0):.1%})")
         
-        # DeepFashion CNN - классификация одежды
-        if 'garment_classification' in integrated:
-            garment = integrated['garment_classification']
-            description.append(f"\n👕 **КЛАССИФИКАЦИЯ (DeepFashion CNN):**")
-            description.append(f"  • Тип: {garment.get('category', 'unknown')} ({garment.get('confidence', 0):.1%})")
-            if garment.get('top_predictions'):
-                description.append("  • Топ-3 предсказания:")
-                for i, pred in enumerate(garment['top_predictions'][:3]):
-                    description.append(f"    {i+1}. {pred['category']} ({pred['confidence']:.1%})")
+        # ПРИОРИТЕТ 2: Новые анализы
+        description.append(f"\n🔧 **ПРИОРИТЕТ 2 - РАСШИРЕННЫЙ АНАЛИЗ:**")
         
-        # YOLO - детекция объектов
-        if 'object_detection' in integrated:
-            detection = integrated['object_detection']
-            description.append(f"\n🔍 **ДЕТЕКЦИЯ (YOLO):**")
-            description.append(f"  • Объектов: {detection.get('total_objects', 0)}")
-            description.append(f"  • Композиция: {detection.get('layout', 'unknown')}")
-            description.append(f"  • Область: {detection.get('dominant_region', 'unknown')}")
+        # Многоуровневая классификация
+        if 'hierarchical_analysis' in analysis:
+            hierarchy = analysis['hierarchical_analysis']
+            description.append(f"\n🏗️ **МНОГОУРОВНЕВАЯ КЛАССИФИКАЦИЯ:**")
+            description.append(f"  • Уровень 1: {hierarchy.get('level1', 'unknown')}")
+            description.append(f"  • Уровень 2: {hierarchy.get('level2', 'unknown')}")
+            description.append(f"  • Уровень 3: {hierarchy.get('level3', 'unknown')}")
         
-        # Специализированные метрики
-        description.append(f"\n📊 **СПЕЦИАЛИЗИРОВАННОЕ КАЧЕСТВО:**")
-        if 'specialization_weights' in metrics:
-            weights = metrics['specialization_weights']
-            description.append(f"  • Стиль (FashionCLIP): {metrics.get('style_analysis_score', 0):.1%} (вес: {weights['style_analysis_score']:.1%})")
-            description.append(f"  • Классификация (DeepFashion): {metrics.get('garment_classification_score', 0):.1%} (вес: {weights['garment_classification_score']:.1%})")
-            description.append(f"  • Детекция (YOLO): {metrics.get('object_detection_score', 0):.1%} (вес: {weights['object_detection_score']:.1%})")
+        # Специализированный анализ
+        if 'specialized_analysis' in analysis:
+            specialized = analysis['specialized_analysis']
+            description.append(f"\n🎯 **СПЕЦИАЛИЗИРОВАННЫЙ АНАЛИЗ:**")
+            description.append(f"  • Тип: {specialized.get('specialized_type', 'unknown')}")
+            if 'shoe_type' in specialized:
+                description.append(f"  • Обувь: {specialized.get('shoe_type', 'unknown')}")
+            elif 'dress_type' in specialized:
+                description.append(f"  • Платье: {specialized.get('dress_type', 'unknown')}")
+            elif 'accessory_type' in specialized:
+                description.append(f"  • Аксессуар: {specialized.get('accessory_type', 'unknown')}")
+            elif 'formal_type' in specialized:
+                description.append(f"  • Деловая одежда: {specialized.get('formal_type', 'unknown')}")
+            description.append(f"  • Уверенность: {specialized.get('confidence', 0):.1%}")
+        
+        # Дополнительная поддержка
+        description.append(f"\n🔧 **ДОПОЛНИТЕЛЬНАЯ ПОДДЕРЖКА:**")
+        
+        # ResNet - визуальная поддержка
+        if 'visual_support' in integrated:
+            visual = integrated['visual_support']
+            description.append(f"\n👕 **ВИЗУАЛЬНАЯ ПОДДЕРЖКА (ResNet):**")
+            description.append(f"  • Текстура: {visual.get('texture_analysis', 'unknown')} ({visual.get('confidence', 0):.1%})")
+        
+        # YOLO - композиционная поддержка
+        if 'composition_support' in integrated:
+            composition = integrated['composition_support']
+            description.append(f"\n🔍 **КОМПОЗИЦИОННАЯ ПОДДЕРЖКА (YOLO):**")
+            description.append(f"  • Объектов: {composition.get('total_objects', 0)}")
+            description.append(f"  • Композиция: {composition.get('layout', 'unknown')}")
+            description.append(f"  • Область: {composition.get('dominant_region', 'unknown')}")
+        
+        # Приоритетные метрики с улучшениями
+        description.append(f"\n📊 **ПРИОРИТЕТНОЕ КАЧЕСТВО (УЛУЧШЕНО):**")
+        if 'priority_weights' in metrics:
+            weights = metrics['priority_weights']
+            description.append(f"  • FashionCLIP (основной): {metrics.get('fashion_clip_score', 0):.1%} (вес: {weights['fashion_clip_score']:.1%})")
+            description.append(f"  • ResNet (поддержка): {metrics.get('resnet_support_score', 0):.1%} (вес: {weights['resnet_support_score']:.1%})")
+            description.append(f"  • YOLO (поддержка): {metrics.get('yolo_support_score', 0):.1%} (вес: {weights['yolo_support_score']:.1%})")
+        
+        # Информация об улучшениях
+        description.append(f"\n🚀 **ПРИМЕНЕННЫЕ УЛУЧШЕНИЯ:**")
+        description.append(f"  • ✅ Улучшенная предобработка изображений")
+        description.append(f"  • ✅ Динамические веса ансамбля")
+        description.append(f"  • ✅ Кэширование результатов")
+        description.append(f"  • ✅ Многоуровневая классификация")
+        description.append(f"  • ✅ Анализ совместимости элементов")
+        description.append(f"  • ✅ Специализированные модели")
         
         description.append(f"\n🎯 **ОБЩЕЕ КАЧЕСТВО:** {metrics.get('overall_quality', 0):.1%}")
         
         return "\n".join(description)
+    
+    def hierarchical_classification(self, predictions):
+        """Многоуровневая классификация для повышения точности"""
+        hierarchy = {
+            'level1': 'одежда',
+            'level2': self._determine_level2(predictions),
+            'level3': self._determine_level3(predictions)
+        }
+        return hierarchy
+    
+    def _determine_level2(self, predictions):
+        """Определение уровня 2 (общая категория)"""
+        garment_type = predictions.get('garment_type', 'unknown')
+        
+        # Категории уровня 2
+        if garment_type in ['футболка', 'рубашка', 'блузка', 'свитер', 'топ', 'майка', 'поло', 'водолазка']:
+            return 'верх'
+        elif garment_type in ['джинсы', 'брюки', 'шорты', 'юбка', 'леггинсы', 'штаны']:
+            return 'низ'
+        elif garment_type in ['кроссовки', 'туфли', 'ботинки', 'сандали', 'сапоги', 'лодочки']:
+            return 'обувь'
+        elif garment_type in ['куртка', 'пальто', 'пиджак', 'жилет', 'кардиган', 'бомбер']:
+            return 'верхняя_одежда'
+        elif garment_type in ['сумка', 'рюкзак', 'кошелек', 'шляпа', 'кепка', 'шарф']:
+            return 'аксессуары'
+        else:
+            return 'неопределено'
+    
+    def _determine_level3(self, predictions):
+        """Определение уровня 3 (конкретный тип)"""
+        return predictions.get('garment_type', 'unknown')

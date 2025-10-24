@@ -10,10 +10,3 @@ opencv-python>=4.7.0
 scikit-learn>=1.3.0
 matplotlib>=3.7.0
 seaborn>=0.12.0
-# DeepFashion CNN dependencies
-torch-audio>=2.0.0
-torchaudio>=2.0.0
-
-# Accuracy Enhancement dependencies
-scikit-learn>=1.3.0
-opencv-python>=4.7.0

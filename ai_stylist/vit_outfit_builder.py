@@ -12,6 +12,14 @@ from typing import List, Dict, Tuple, Optional
 from PIL import Image
 import numpy as np
 
+# Импорт анализатора совместимости
+try:
+    from compatibility_analyzer import CompatibilityAnalyzer
+    COMPATIBILITY_AVAILABLE = True
+except ImportError as e:
+    print(f"⚠️ CompatibilityAnalyzer не доступен: {e}")
+    COMPATIBILITY_AVAILABLE = False
+
 # Проверяем наличие необходимых библиотек
 try:
     import torch
@@ -277,6 +285,14 @@ class OutfitBuilder:
         self.occasion_rules = OccasionRules()
         self.wardrobe = {}  # Хранилище гардероба пользователя
         
+        # ИНТЕГРАЦИЯ: Анализатор совместимости
+        if COMPATIBILITY_AVAILABLE:
+            self.compatibility_analyzer = CompatibilityAnalyzer()
+            print("✅ Анализатор совместимости интегрирован!")
+        else:
+            self.compatibility_analyzer = None
+            print("⚠️ Анализатор совместимости недоступен")
+        
     def add_item_to_wardrobe(self, item_id: str, image: Image.Image, 
                            features: Dict = None) -> None:
         """Добавляет предмет в гардероб"""
@@ -386,12 +402,47 @@ class OutfitBuilder:
         else:
             confidence = 0.0
         
+        # ИНТЕГРАЦИЯ: Анализ совместимости образа
+        compatibility_result = None
+        enhanced_confidence = confidence
+        
+        if self.compatibility_analyzer and len(selected_items) >= 2:
+            try:
+                # Подготавливаем данные для анализа совместимости
+                compatibility_items = []
+                for item in selected_items:
+                    features = item.get("features", {})
+                    compatibility_items.append({
+                        'garment_type': features.get('garment_type', 'unknown'),
+                        'color': features.get('color', 'unknown'),
+                        'style': features.get('style', 'unknown'),
+                        'season': features.get('season', 'unknown')
+                    })
+                
+                # Анализируем совместимость
+                compatibility_result = self.compatibility_analyzer.analyze_outfit_compatibility(compatibility_items)
+                
+                # Улучшаем уверенность на основе совместимости
+                compatibility_score = compatibility_result.get('compatibility_score', 0.5)
+                enhanced_confidence = (confidence * 0.7) + (compatibility_score * 0.3)
+                
+                print(f"🔍 Анализ совместимости: {compatibility_score:.1%}")
+                
+            except Exception as e:
+                print(f"⚠️ Ошибка анализа совместимости: {e}")
+                compatibility_result = {
+                    'compatibility_score': 0.5,
+                    'recommendations': ['Анализ совместимости недоступен']
+                }
+        
         return {
             "outfit": selected_items,
-            "confidence": confidence,
+            "confidence": enhanced_confidence,
+            "original_confidence": confidence,
+            "compatibility_analysis": compatibility_result,
             "occasion": occasion,
             "total_items": len(selected_items),
-            "explanation": self._generate_explanation(selected_items, occasion)
+            "explanation": self._generate_enhanced_explanation(selected_items, occasion, compatibility_result)
         }
     
     def _generate_explanation(self, outfit: List[Dict], occasion: str) -> str:
@@ -452,6 +503,34 @@ class OutfitBuilder:
         
         return "\n".join(explanation_parts)
     
+    def _generate_enhanced_explanation(self, outfit: List[Dict], occasion: str, compatibility_result: Dict = None) -> str:
+        """Генерирует улучшенное объяснение с анализом совместимости"""
+        # Базовое объяснение
+        explanation = self._generate_explanation(outfit, occasion)
+        
+        # Добавляем анализ совместимости
+        if compatibility_result:
+            compatibility_score = compatibility_result.get('compatibility_score', 0.5)
+            recommendations = compatibility_result.get('recommendations', [])
+            
+            explanation += f"\n\n🔍 **АНАЛИЗ СОВМЕСТИМОСТИ:**"
+            explanation += f"\n• Общая совместимость: {compatibility_score:.1%}"
+            
+            if recommendations:
+                explanation += f"\n• Рекомендации:"
+                for rec in recommendations:
+                    explanation += f"\n  {rec}"
+            
+            # Детальный анализ совместимости
+            if 'analysis' in compatibility_result and isinstance(compatibility_result['analysis'], list):
+                explanation += f"\n• Детальный анализ:"
+                for i, analysis_item in enumerate(compatibility_result['analysis'][:3]):  # Показываем первые 3
+                    items = analysis_item.get('items', ['unknown', 'unknown'])
+                    overall_score = analysis_item.get('overall_score', 0)
+                    explanation += f"\n  - {items[0]} + {items[1]}: {overall_score:.1%}"
+        
+        return explanation
+    
     def get_wardrobe_stats(self) -> Dict:
         """Получает статистику гардероба"""
         return {
@@ -462,6 +541,44 @@ class OutfitBuilder:
                             for item in self.wardrobe.values())),
             "styles": list(set(item["features"].get("style", "unknown") 
                              for item in self.wardrobe.values()))
+        }
+    
+    def analyze_item_compatibility(self, item1_id: str, item2_id: str) -> Dict:
+        """Анализирует совместимость двух конкретных предметов"""
+        if not self.compatibility_analyzer:
+            return {"error": "Анализатор совместимости недоступен"}
+        
+        if item1_id not in self.wardrobe or item2_id not in self.wardrobe:
+            return {"error": "Один или оба предмета не найдены в гардеробе"}
+        
+        item1 = self.wardrobe[item1_id]
+        item2 = self.wardrobe[item2_id]
+        
+        # Подготавливаем данные для анализа
+        items = [
+            {
+                'garment_type': item1["features"].get('garment_type', 'unknown'),
+                'color': item1["features"].get('color', 'unknown'),
+                'style': item1["features"].get('style', 'unknown'),
+                'season': item1["features"].get('season', 'unknown')
+            },
+            {
+                'garment_type': item2["features"].get('garment_type', 'unknown'),
+                'color': item2["features"].get('color', 'unknown'),
+                'style': item2["features"].get('style', 'unknown'),
+                'season': item2["features"].get('season', 'unknown')
+            }
+        ]
+        
+        # Анализируем совместимость
+        compatibility_result = self.compatibility_analyzer.analyze_outfit_compatibility(items)
+        
+        return {
+            "item1": item1_id,
+            "item2": item2_id,
+            "compatibility_score": compatibility_result.get('compatibility_score', 0.5),
+            "recommendations": compatibility_result.get('recommendations', []),
+            "detailed_analysis": compatibility_result.get('analysis', [])
         }
 
 
@@ -553,6 +670,33 @@ class ViTOutfitManager:
     def clear_wardrobe(self) -> None:
         """Очищает гардероб"""
         self.outfit_builder.wardrobe.clear()
+    
+    def analyze_outfit_compatibility(self, outfit_items: List[str]) -> Dict:
+        """Анализирует совместимость элементов образа"""
+        if not outfit_items or len(outfit_items) < 2:
+            return {"error": "Недостаточно предметов для анализа совместимости"}
+        
+        # Получаем предметы из гардероба
+        items = []
+        for item_id in outfit_items:
+            if item_id in self.outfit_builder.wardrobe:
+                item = self.outfit_builder.wardrobe[item_id]
+                features = item.get("features", {})
+                items.append({
+                    'garment_type': features.get('garment_type', 'unknown'),
+                    'color': features.get('color', 'unknown'),
+                    'style': features.get('style', 'unknown'),
+                    'season': features.get('season', 'unknown')
+                })
+        
+        if len(items) < 2:
+            return {"error": "Недостаточно предметов с характеристиками для анализа"}
+        
+        # Анализируем совместимость
+        if self.outfit_builder.compatibility_analyzer:
+            return self.outfit_builder.compatibility_analyzer.analyze_outfit_compatibility(items)
+        else:
+            return {"error": "Анализатор совместимости недоступен"}
 
 
 if __name__ == "__main__":

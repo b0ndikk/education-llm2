@@ -6,7 +6,7 @@
 import os
 import torch
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageEnhance, ImageFilter
 import torchvision.transforms as transforms
 import cv2
 
@@ -290,9 +290,32 @@ class FashionCLIPAnalyzer:
         ]
     }
     
-    def analyze_image(self, image: Image.Image) -> dict:
-        """Анализирует изображение одежды"""
+    def enhance_image_quality(self, image):
+        """Улучшение качества изображения перед анализом"""
         try:
+            # Увеличение контраста для лучшего распознавания
+            image = ImageEnhance.Contrast(image).enhance(1.2)
+            
+            # Нормализация яркости
+            image = ImageEnhance.Brightness(image).enhance(1.1)
+            
+            # Устранение шума
+            image = image.filter(ImageFilter.MedianFilter())
+            
+            # Улучшение резкости
+            image = ImageEnhance.Sharpness(image).enhance(1.1)
+            
+            return image
+        except Exception as e:
+            print(f"⚠️ Ошибка улучшения изображения: {e}")
+            return image
+    
+    def analyze_image(self, image: Image.Image) -> dict:
+        """Анализирует изображение одежды с улучшенной предобработкой"""
+        try:
+            # УЛУЧШЕНИЕ: Улучшаем качество изображения
+            enhanced_image = self.enhance_image_quality(image)
+            
             analysis = {}
             
             for category, options in self.categories.items():
@@ -300,8 +323,8 @@ class FashionCLIPAnalyzer:
                 text_inputs = self.processor(text=options, return_tensors="pt", padding=True)
                 text_inputs = {k: v.to(self.device) for k, v in text_inputs.items()}
                 
-                # Подготавливаем изображение
-                image_inputs = self.processor(images=image, return_tensors="pt")
+                # Подготавливаем улучшенное изображение
+                image_inputs = self.processor(images=enhanced_image, return_tensors="pt")
                 image_inputs = {k: v.to(self.device) for k, v in image_inputs.items()}
                 
                 with torch.no_grad():
